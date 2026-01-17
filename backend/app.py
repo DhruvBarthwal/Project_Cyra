@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+from utils.schemas import VoiceInput
 
 load_dotenv()
 

@@ -1,14 +1,13 @@
 def fallback_intent(text: str) -> str:
-    text = text.lower()
+    text = (text or "").lower().strip()
 
-    # 🔴 CONFIRM MUST COME FIRST
-    if any(k in text for k in ["confirm", "yes", "send it", "go ahead", "okay send"]):
+    if any(k in text for k in ["confirm", "yes", "send it", "go ahead", "okay"]):
         return "CONFIRM_SEND"
 
     if any(k in text for k in ["delete", "remove", "trash", "discard"]):
         return "DELETE_EMAIL"
 
-    if any(k in text for k in ["send email", "write email", "compose", "new mail"]):
+    if any(k in text for k in ["write", "compose", "send email", "new email"]):
         return "CREATE_EMAIL"
 
     if any(k in text for k in ["read", "open", "check", "show", "inbox"]):

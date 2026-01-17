@@ -1,7 +1,7 @@
 from typing import TypedDict
 
 class AgentState(TypedDict, total=False):
-    user_input = str
+    user_input : str
     intent : str
     to : str
     subject : str
