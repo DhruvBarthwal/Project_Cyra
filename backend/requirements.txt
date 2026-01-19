@@ -10,3 +10,4 @@ google-auth
 google-auth-oauthlib
 pydantic
 google-genai
+beautifulsoup4

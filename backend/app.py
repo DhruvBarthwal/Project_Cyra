@@ -22,9 +22,10 @@ async def voice_input(payload : VoiceInput):
     if result.get("intent") == "READ_EMAIL":
         return {
             "response": (
-                f"Email is from {result.get('email_from')}.\n"
-                f"Subject: {result.get('email_subject')}.\n\n"
-                f"Content: {result.get("email.body")}"
+                    f"You have a new email.\n"
+                    f"From {result['email_from']}.\n"
+                    f"Subject: {result['email_subject']}.\n"
+                    f"Message: {result['email_body']}"
             )
         }
     

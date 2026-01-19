@@ -1,19 +1,37 @@
 import base64
 from email.message import EmailMessage
+from utils.clean_mails import html_to_clean_text , clean_email_text
+
+def extract_body(payload, depth=0):
+    indent = "  " * depth
+    mime_type = payload.get("mimeType", "")
+    body_data = payload.get("body", {}).get("data")
+
+    if body_data:
+        print(f"{indent} Found body data (length={len(body_data)})")
+
+    if mime_type == "text/plain" and body_data:
+        text = base64.urlsafe_b64decode(
+            body_data
+        ).decode("utf-8", errors="ignore")
+        return text
+
+    if mime_type == "text/html" and body_data:
+        text = base64.urlsafe_b64decode(
+            body_data
+        ).decode("utf-8", errors="ignore")
+        return text
+
+    for part in payload.get("parts", []):
+        result = extract_body(part, depth + 1)
+        if result:
+            return result
+
+    print(f"{indent}❌ No body found at this level")
+    return ""
 
 
 def read_latest_email(service):
-    """
-    Returns:
-        {
-            "id": msg_id,
-            "from": sender,
-            "subject": subject,
-            "body": body
-        }
-    """
-
-    # 1️⃣ Get latest email ID
     msgs = service.users().messages().list(
         userId="me",
         maxResults=1,
@@ -26,7 +44,6 @@ def read_latest_email(service):
 
     msg_id = messages[0]["id"]
 
-    # 2️⃣ Get full email
     msg = service.users().messages().get(
         userId="me",
         id=msg_id,
@@ -34,7 +51,6 @@ def read_latest_email(service):
     ).execute()
 
     headers = msg["payload"].get("headers", [])
-
     sender = ""
     subject = ""
 
@@ -44,22 +60,15 @@ def read_latest_email(service):
         elif h["name"] == "Subject":
             subject = h["value"]
 
-    # 3️⃣ Extract email body
-    body = ""
+    print("🚀 CALLING extract_body()")
+    raw_body = extract_body(msg["payload"])
 
-    payload = msg["payload"]
-
-    if "parts" in payload:
-        for part in payload["parts"]:
-            if part["mimeType"] == "text/plain":
-                data = part["body"].get("data")
-                if data:
-                    body = base64.urlsafe_b64decode(data).decode("utf-8")
-                    break
+    if "<html" in raw_body.lower():
+        body = html_to_clean_text(raw_body)
     else:
-        data = payload["body"].get("data")
-        if data:
-            body = base64.urlsafe_b64decode(data).decode("utf-8")
+        body = clean_email_text(raw_body)
+
+    body = body[:500]  
 
     return {
         "id": msg_id,
@@ -67,6 +76,7 @@ def read_latest_email(service):
         "subject": subject,
         "body": body.strip()
     }
+
 
 
 def delete_email(service, msg_id):
