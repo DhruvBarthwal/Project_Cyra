@@ -14,8 +14,10 @@ def confirm_delete_node(state):
     print("🗑️ DELETING EMAIL:", state["email_id"])
 
     service = get_gmail_service()
+    email_id = state.get("email_id")
     delete_email(service, state["email_id"])
 
+    state["last_deleted_email_id"] = email_id
     state["response"] = "The email has been deleted successfully."
     state["email_id"] = None
 

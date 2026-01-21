@@ -6,12 +6,10 @@ def html_to_clean_text(html_content: str)-> str:
     if not html_content:
         return ""
     
-    #Decode HTML entities
     html_content = html.unescape(html_content)
     
     soup = BeautifulSoup(html_content, "html.parser")
     
-    #Remove scripts, styles, meta , head junk
     for tag in soup(["script", "style", "meta","noscript","head"]):
         tag.decompose()
         
@@ -42,6 +40,7 @@ def html_to_clean_text(html_content: str)-> str:
 
     return text.strip()
 
+
 def clean_email_text(text: str) -> str:
     if not text:
         return ""
@@ -49,7 +48,6 @@ def clean_email_text(text: str) -> str:
     #Remove urls
     text = re.sub(r"http\S+","",text)
     
-    #Replace multiple whitespace/newlines/tabs with single space
     text = re.sub(r"\s+"," ",text)
     
     #Remove marketing footers keywords
@@ -69,3 +67,12 @@ def clean_email_text(text: str) -> str:
             text = text[:idx]
             break
     return text.strip()
+
+
+def extract_sender(user_input : str):
+    text = user_input.lower()
+    
+    if "from" in text:
+        return text.split('from', 1)[1].strip()
+    
+    return None

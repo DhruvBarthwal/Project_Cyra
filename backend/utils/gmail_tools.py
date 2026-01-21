@@ -101,3 +101,71 @@ def send_email(service, to, subject, body):
         userId = "me",
         body = {"raw" : raw}
     ).execute()
+
+def read_email_by_id(service, email_id):
+    msg = service.users().messages().get(
+        userId="me",
+        id=email_id,
+        format="full"
+    ).execute()
+
+    headers = msg["payload"].get("headers", [])
+    subject = from_email = ""
+
+    for h in headers:
+        if h["name"] == "Subject":
+            subject = h["value"]
+        elif h["name"] == "From":
+            from_email = h["value"]
+
+    # ---- extract body ----
+    body = ""
+
+    def extract_body(payload):
+        nonlocal body
+
+        if "parts" in payload:
+            for part in payload["parts"]:
+                extract_body(part)
+        else:
+            if payload.get("mimeType") == "text/plain":
+                data = payload["body"].get("data")
+                if data:
+                    body = base64.urlsafe_b64decode(data).decode("utf-8")
+
+    extract_body(msg["payload"])
+
+    return {
+        "from": from_email,
+        "subject": subject,
+        "body": body.strip()
+    }
+
+def star_email(service, email_id):
+    service.users().messages().modify(
+        userId = "me",
+        id = email_id,
+        body={
+            "addLabelIds": ["STARRED"],
+            "removeLabelIds": []
+        }
+    ).execute()
+
+def unstar_email(service, email_id):
+    service.users().messages().modify(
+        userId = "me",
+        id = email_id,
+        body ={
+            "addLabelsIds" : [],
+            "removeLabelIds" : ["STARRED"]
+        }
+    ).execute()
+
+def untrash_email(service,email_id):
+    service.users().messages().modify(
+        userId = "me",
+        id = email_id,
+        body = {
+            "removeLabelIds" : ["TRASH"]
+        }
+    ).execute()
