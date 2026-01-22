@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+@font-face {
+  font-family: "Qurova";
+  src: url("/fonts/qurova/QurovaDEMO-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Mona Sans";
+  src: url("/fonts/MonaSans/fonnts.com-Mona-Sans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+html,body{
+    font-family: "Mona Sans", sans-serif;
+}
+
+.hero-heading{
+    font-family: "Qurova", sans-serif;
+}
