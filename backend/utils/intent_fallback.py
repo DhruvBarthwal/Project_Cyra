@@ -18,6 +18,7 @@ def fallback_intent(text: str) -> str:
         "restore"
     ]):
         return "UNTRASH_EMAIL"
+    
     if any(k in text for k in [
         "no",
         "nope",

@@ -12,6 +12,8 @@ class AgentState(TypedDict, total=False):
     
     #email composing
     to : Optional[str]
+    to_local : Optional[str]
+    email_provider : Optional[str]
     subject : Optional[str]
     body : Optional[str]
     attachments : Optional[List[str]]

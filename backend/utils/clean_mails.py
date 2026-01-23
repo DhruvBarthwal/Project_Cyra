@@ -76,3 +76,45 @@ def extract_sender(user_input : str):
         return text.split('from', 1)[1].strip()
     
     return None
+
+import re
+
+NUMBER_WORDS = {
+    "zero": "0", "one": "1", "two": "2", "three": "3",
+    "four": "4", "five": "5", "six": "6", "seven": "7",
+    "eight": "8", "nine": "9"
+}
+
+def normalize_username(text: str | None):
+    if not text:
+        return None
+
+    t = text.lower()
+
+    # remove punctuation Deepgram adds
+    t = re.sub(r"[^\w\s]", "", t)
+
+    # numbers
+    for word, digit in NUMBER_WORDS.items():
+        t = re.sub(rf"\b{word}\b", digit, t)
+
+    # remove spaces
+    t = t.replace(" ", "")
+
+    print("🧪 NORMALIZED USERNAME:", t)
+
+    # username must be alphanumeric, min length
+    if re.fullmatch(r"[a-z0-9]{3,}", t):
+        return t
+
+    return None
+
+def preserve_email_state(state):
+    return {
+        "to": state.get("to"),
+        "to_local": state.get("to_local"),
+        "email_provider": state.get("email_provider"),
+        "subject": state.get("subject"),
+        "body": state.get("body"),
+    }
+

@@ -3,32 +3,63 @@ import { createDeepgramSocket } from "@/lib/deepgram";
 import { sendToBackend } from "@/lib/api";
 import { speak } from "@/lib/tts";
 
-export function useVoiceAgent() {
+export function useVoiceAgent( onMessage?: (role: "user" | "agent", text: string) => void) {
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
 
   const [listening, setListening] = useState(false);
   const [lastEmailId, setLastEmailId] = useState<string | null>(null);
-
+  const lastEmailIdRef = useRef<string | null>(null);
   async function start() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
     socketRef.current = createDeepgramSocket(async (finalText) => {
       console.log("🧑 User:", finalText);
 
+      onMessage?.("user", finalText);
+
       setListening(false);
 
-      const data = await sendToBackend(finalText, lastEmailId);
+      console.log("➡️ PAYLOAD:", {
+        text: finalText,
+        email_id: lastEmailIdRef.current,
+      });
+
+      const lower = finalText.toLowerCase();
+
+      const isComposeFlow = 
+        lower.includes("create") ||
+        lower.includes("compose") ||
+        lower.includes("write") ||
+        lower.includes("send mail");
+
+      const data = await sendToBackend(
+        finalText, 
+        isComposeFlow || lastEmailIdRef.current == null
+        ? null
+        : lastEmailIdRef.current
+      );
+
+      if (data.email_id) {
+        console.log("📌 Updating lastEmailId:", data.email_id);
+        setLastEmailId(data.email_id);
+      }
 
       if (typeof data.email_id === "string") {
+        console.log("📌 Updating lastEmailId:", data.email_id);
+
+        lastEmailIdRef.current = data.email_id; // 🔥 IMPORTANT
         setLastEmailId(data.email_id);
       }
 
       if (data.deleted === true) {
+        lastEmailIdRef.current = null;
         setLastEmailId(null);
       }
 
       console.log("🤖 Alex:", data.response);
+
+      onMessage?.("agent", data.response);
 
       speak(data.response);
     });
@@ -66,16 +97,12 @@ export function useVoiceAgent() {
   async function reset() {
     stop();
 
-    // clear frontend memory
+    lastEmailIdRef.current = null;
     setLastEmailId(null);
 
-    // tell backend to reset state
     await sendToBackend("reset", null);
 
-    // restart cleanly
-    setTimeout(() => {
-      start();
-    }, 300);
+    setTimeout(() => start(), 300);
   }
 
   return { start, stop, reset, listening };

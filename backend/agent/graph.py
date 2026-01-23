@@ -6,11 +6,7 @@ from agent.nodes.read_mails.delete_email import delete_email_node
 from agent.nodes.read_mails.confirm_delete import confirm_delete_node
 from agent.nodes.multiRead_mails.read_filtered_emails import read_filtered_emails_node, prev_email_node, next_email_node
 
-from agent.nodes.send_mails.compose_email import compose_email_node
-from agent.nodes.send_mails.collect_to import collect_to_node
-from agent.nodes.send_mails.collect_subject import collect_subject_node
-from agent.nodes.send_mails.collect_body import collect_body_node
-from agent.nodes.send_mails.send_email import send_email_node
+from agent.nodes.send_mails.send_mail import compose_email_node,collect_to_local_node,collect_provider_node,collect_subject_node,collect_body_node,send_email_node
 
 from agent.nodes.star_mails.star_email_node import star_email_node
 from agent.nodes.star_mails.unstar_email_node import unstar_email_node
@@ -24,45 +20,67 @@ from utils.llm_intent import classify_intent
 from utils.intent_fallback import fallback_intent
 
 def intent_node(state: AgentState):
+    user_input = state.get("user_input")
     
+    print("\n🧠 INTENT NODE")
+    print("User input:", state.get("user_input"))
+    print("Prev sender:", state.get("sender_filter"))
+    print("Awaiting field:", state.get("awaiting_field"))
+
     if state.get("awaiting_field"):
+        if state.get("user_input", "").lower() in ["reset", "cancel", "stop", "exit"]:
+            state["intent"] = "RESET"
         return state
 
-    user_input = state.get("user_input", None)
-    
     sender = extract_sender(user_input)
-    if sender:
-        state["sender_filter"] = sender
-        print("SENDER FILTER:",sender)
 
-    intent_from_fallback = fallback_intent(user_input or "")
-  
-    intent = intent_from_fallback
+    prev_sender = state.get("sender_filter")  
+
+    if sender:
+        if sender and sender != prev_sender:
+            print(f"🔁 Sender changed: {prev_sender} → {sender}")
+
+            state["sender_filter"] = sender
+            state["email_ids"] = []
+            state["email_index"] = 0
+            state["email_id"] = None
+        else:
+            state["sender_filter"] = sender
+
+    intent = fallback_intent(user_input or "")
 
     if intent == "UNKNOWN":
         try:
             intent = classify_intent(user_input or "")
-            
-        except Exception as e:
+        except Exception:
             intent = "UNKNOWN"
 
     state["intent"] = intent
     return state
 
+
 def router(state: AgentState):
     awaiting = state.get("awaiting_field")
+    text = (state.get("user_input") or "").lower()
+        
+    if awaiting == "to_local":
+        return "COLLECT_TO_LOCAL"
 
-    if awaiting == "to":
-        return "COLLECT_TO"
+    if awaiting == "email_provider":
+        return "COLLECT_PROVIDER"
+    
     if awaiting == "subject":
         return "COLLECT_SUBJECT"
+    
     if awaiting == "body":
         return "COLLECT_BODY"
+    
     if awaiting == "confirm":
-        if state.get("intent") == "CONFIRM_SEND":
-            return "CONFIRM_SEND"
-        if state.get("intent") == "CANCEL_DELETE":
-            return "CANCEL_DELETE" 
+        if any(k in text for k in ["yes", "send", "okay", "confirm"]):
+            return "SEND_EMAIL"
+
+        if any(k in text for k in ["no", "cancel", "stop", "don't"]):
+            return "RESET" 
     
     if state.get("intent") == "NEXT_EMAIL":
         return "NEXT_EMAIL"
@@ -106,7 +124,9 @@ def build_graph():
 
 
     graph.add_node("compose_email", compose_email_node)
-    graph.add_node("collect_to", collect_to_node)
+    graph.add_node("collect_to_local", collect_to_local_node)
+    graph.add_node("collect_provider", collect_provider_node)
+
     graph.add_node("collect_subject", collect_subject_node)
     graph.add_node("collect_body", collect_body_node)
     graph.add_node("send_email", send_email_node)
@@ -134,10 +154,10 @@ def build_graph():
             "PREV_EMAIL": "prev_email",
         
             "DELETE_EMAIL": "delete_email",
-            "CONFIRM_SEND": "confirm_delete",
             "COMPOSE_EMAIL" : "compose_email",
             
-            "COLLECT_TO": "collect_to",
+            "COLLECT_TO_LOCAL": "collect_to_local",
+            "COLLECT_PROVIDER": "collect_provider",
             "COLLECT_SUBJECT": "collect_subject",
             "COLLECT_BODY": "collect_body",
             "SEND_EMAIL": "send_email",
