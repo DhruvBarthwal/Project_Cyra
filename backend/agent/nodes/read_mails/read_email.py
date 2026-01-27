@@ -27,17 +27,20 @@ def normalize_field(value,fallback):
         return fallback
     return value
 
-def speak_summary(summary : dict) -> str:
+def speak_summary(summary: dict) -> str:
     parts = []
     
     purpose = summary.get("Purpose")
-    if purpose:
+    if purpose and purpose.lower() != "not mentioned":
         parts.append(f"Basically, it's about {purpose.lower()}.")
-        
-    key_points = summary.get("key points",[])
-    if key_points:
-        highlights = ";".join(key_points[:3])
-        parts.appned(f"The main highlights are: {highlights}.")
+    
+    key_points = summary.get("Key points", [])
+    # Filter out "Not mentioned" entries
+    valid_points = [p for p in key_points if p.lower() != "not mentioned"]
+    
+    if valid_points:
+        highlights = "; ".join(valid_points[:3])
+        parts.append(f"The main highlights are: {highlights}.")
     
     deadline = normalize_field(
         summary.get("Deadlines"),

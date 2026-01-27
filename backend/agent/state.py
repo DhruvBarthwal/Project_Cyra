@@ -1,4 +1,6 @@
 from typing import TypedDict, Optional, List
+from pydantic import BaseModel, Field
+
 
 class AgentState(TypedDict, total=False):
     user_input : str
@@ -26,8 +28,14 @@ class AgentState(TypedDict, total=False):
     sender_filter : Optional[str]
     
     last_deleted_email_id : str
-    
+
     response: str
     
-    
+
+class EmailSummary(BaseModel):
+    sender: str = Field(description="Who sent this email")
+    purpose: str = Field(description="Main purpose or topic of the email")
+    key_points: List[str] = Field(description="Important details, offers, or information")
+    deadlines: str = Field(description="Any time-sensitive information or deadlines")
+
     

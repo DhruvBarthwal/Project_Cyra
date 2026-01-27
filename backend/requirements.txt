@@ -13,3 +13,4 @@ pydantic
 google-genai
 beautifulsoup4
 transformers torch
+pydantic
