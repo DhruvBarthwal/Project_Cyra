@@ -55,7 +55,6 @@ def read_filtered_emails_node(state):
         state["response"] = "Whose emails should I read?"
         return state
 
-    # 1️⃣ Load filtered inbox ONCE
     if "email_ids" not in state or not state["email_ids"]:
         query = f"from:{sender}"
         results = service.users().messages().list(
@@ -73,7 +72,6 @@ def read_filtered_emails_node(state):
         state["email_ids"] = email_ids
         state["email_index"] = 0
 
-    # 2️⃣ Navigation (SAME as inbox reader)
     nav = state.get("navigation")
     if nav == "next":
         state["email_index"] += 1
@@ -82,7 +80,6 @@ def read_filtered_emails_node(state):
 
     state["navigation"] = None
 
-    # 3️⃣ Boundary checks
     if state["email_index"] < 0:
         state["email_index"] = 0
         state["response"] = "You’re already at the first email from this sender."
@@ -93,7 +90,6 @@ def read_filtered_emails_node(state):
         state["response"] = "That was the last email from this sender."
         return state
 
-    # 4️⃣ Read selected email
     email_id = state["email_ids"][state["email_index"]]
     email = read_email_by_id(service, email_id)
 
@@ -106,7 +102,6 @@ def read_filtered_emails_node(state):
     state["email_subject"] = subject
     state["email_body"] = body
 
-    # 5️⃣ Voice-friendly responses (IDENTICAL STYLE)
     if is_image_based(body):
         state["response"] = (
             f"This email from {sender_name} is about {subject}. "

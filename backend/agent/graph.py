@@ -21,17 +21,10 @@ from utils.intent_fallback import fallback_intent
 
 def intent_node(state: AgentState):
     user_input = state.get("user_input")
-    
-    print("\n🧠 INTENT NODE")
-    print("User input:", state.get("user_input"))
-    print("Prev sender:", state.get("sender_filter"))
-    print("Awaiting field:", state.get("awaiting_field"))
-    print(f"🔍 STATE AT INTENT ENTRY: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}")
 
     if state.get("awaiting_field"):
         if state.get("user_input", "").lower() in ["reset", "cancel", "stop", "exit"]:
             state["intent"] = "RESET"
-        print(f"🔍 STATE BEFORE RETURN: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}")
         return state
 
     sender = extract_sender(user_input)
@@ -40,7 +33,6 @@ def intent_node(state: AgentState):
 
     if sender:
         if sender and sender != prev_sender:
-            print(f"🔁 Sender changed: {prev_sender} → {sender}")
 
             state["sender_filter"] = sender
             state["email_ids"] = []
@@ -69,7 +61,6 @@ def intent_node(state: AgentState):
 
 
 def router(state: AgentState):
-    print(f"\n🔀 ROUTER ENTRY: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}")
     
     awaiting = state.get("awaiting_field")
     text = (state.get("user_input") or "").lower()
@@ -88,7 +79,6 @@ def router(state: AgentState):
     
     if awaiting == "confirm":
         if any(k in text for k in ["yes", "send", "okay", "confirm"]):
-            print("🔀 ROUTER: Sending to SEND_EMAIL")
             return "SEND_EMAIL"
 
         if any(k in text for k in ["no", "cancel", "stop", "don't"]):

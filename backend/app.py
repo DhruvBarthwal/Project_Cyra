@@ -30,10 +30,6 @@ def hello():
 
 @app.post("/voice")
 async def voice_input(payload: VoiceInput):
-    
-    print("\n================ NEW REQUEST ================")
-    print("TEXT:", payload.text)
-    print("EMAIL_ID FROM FRONTEND:", payload.email_id)
 
     session_id  = "default"
     
@@ -50,8 +46,6 @@ async def voice_input(payload: VoiceInput):
     result = graph.invoke(new_state)
     
     SESSION[session_id] = result
-
-    print("GRAPH RESULT:", result)
     
     return {
         "response": result.get("response"),

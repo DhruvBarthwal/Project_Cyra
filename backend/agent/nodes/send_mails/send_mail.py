@@ -6,8 +6,6 @@ from utils.gmail_tools import send_email
 
 def compose_email_node(state):
     
-    print("✉️ COMPOSE EMAIL STARTED")
-    
     if state.get("awaiting_field") is None:
         state["intent"] = "COMPOSE_EMAIL"
         state["awaiting_field"] = "to_local"
@@ -18,7 +16,6 @@ def compose_email_node(state):
 #---------------------------- Collect email id ----------------------------
 
 def collect_to_local_node(state):
-    print("📛 Collecting email username")
 
     spoken = state.get("user_input")
     username = normalize_username(spoken)
@@ -40,7 +37,6 @@ def collect_to_local_node(state):
     return state
 
 def collect_provider_node(state):
-    print(" COLLECTING EMAIL PROVIDER")
 
     spoken = state.get("user_input", "").lower()
 
@@ -76,15 +72,11 @@ def collect_provider_node(state):
 
 def collect_subject_node(state):
     
-    print("📝 COLLECTING SUBJECT")
     print(f"  Before: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}" )
    
     state["subject"] = state["user_input"]
     state["awaiting_field"] = "body"
     state["response"] = "Okay. What should the email say?"
-    
-    print(f"  After: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}")
-    print(f"  Returning state keys: {list(state.keys())}")
     
     return state
 
@@ -92,28 +84,15 @@ def collect_subject_node(state):
 
 def collect_body_node(state):
     
-    print("📄 COLLECTING BODY")
-    print(f"  Before: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}")
-    
-    
     state["body"] = state["user_input"]
     state["awaiting_field"] = "confirm"
     state["response"] = "Do you want me to send this email now?"
-
-    print(f"  After: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}")
-    print(f"  Returning state keys: {list(state.keys())}")
     
     return state
 
 #---------------------------- Send Mail ----------------------------
 
 def send_email_node(state):
-    print("📤 SENDING EMAIL")
-    print(f"  State keys at entry: {list(state.keys())}")
-    print(f"  TO: {state.get('to')}")
-    print(f"  SUBJECT: {state.get('subject')}")
-    print(f"  BODY: {state.get('body')}")
-    print(f"  Full state: {state}")  # This will show everything
     
     if not state.get("to") or not state.get("body"):
         state["response"] = (

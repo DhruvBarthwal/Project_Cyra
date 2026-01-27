@@ -3,15 +3,9 @@ from utils.gmail_tools import delete_email
 
 def confirm_delete_node(state):
 
-    print("➡️ CONFIRM_DELETE NODE HIT")
-    print("STATE EMAIL_ID:", state.get("email_id"))
-
     if not state.get("email_id"):
-        print("❌ NO EMAIL_ID — NOTHING TO CONFIRM")
         state["response"] = "There is nothing to confirm."
         return state
-
-    print("🗑️ DELETING EMAIL:", state["email_id"])
 
     service = get_gmail_service()
     email_id = state.get("email_id")

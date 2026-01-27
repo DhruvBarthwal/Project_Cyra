@@ -101,7 +101,7 @@ def normalize_username(text: str | None):
     # remove spaces
     t = t.replace(" ", "")
 
-    print("🧪 NORMALIZED USERNAME:", t)
+    print(" NORMALIZED USERNAME:", t)
 
     # username must be alphanumeric, min length
     if re.fullmatch(r"[a-z0-9]{3,}", t):

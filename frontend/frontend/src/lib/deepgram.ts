@@ -17,15 +17,15 @@ export function createDeepgramSocket(
   );
 
   socket.onopen = () => {
-    console.log("🟢 Deepgram socket connected");
+    console.log(" Deepgram socket connected");
   };
 
   socket.onerror = (e) => {
-    console.error("🔴 Deepgram socket error", e);
+    console.error(" Deepgram socket error", e);
   };
 
   socket.onclose = () => {
-    console.log("🟡 Deepgram socket closed");
+    console.log("Deepgram socket closed");
   };
 
   socket.onmessage = (msg) => {
@@ -35,7 +35,7 @@ export function createDeepgramSocket(
       data.channel?.alternatives?.[0]?.transcript;
 
     if (transcript && data.is_final) {
-      console.log("🎧 Final transcript:", transcript);
+      console.log("Final transcript:", transcript);
       onFinalTranscript(transcript);
     }
   };

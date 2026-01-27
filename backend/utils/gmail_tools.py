@@ -158,7 +158,7 @@ def read_email_by_id(service, email_id):
     return {
         "from": from_email,
         "subject": subject,
-        "body": body[:500].strip()   # voice-safe limit
+        "body": body[:500].strip() 
     }
 
 

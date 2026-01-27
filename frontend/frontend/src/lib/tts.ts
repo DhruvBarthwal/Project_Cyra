@@ -4,20 +4,13 @@ function getFemaleFriendlyVoice(): SpeechSynthesisVoice | null {
   const voices = window.speechSynthesis.getVoices();
 
   const preferred = [
-    // Chrome / Google
     "Google UK English Female",
     "Google US English",
-
-    // Microsoft Edge (very natural)
     "Microsoft Zira",
     "Microsoft Jenny",
     "Microsoft Aria",
-
-    // macOS
     "Samantha",
     "Victoria",
-
-    // Firefox / generic
     "English Female",
   ];
 
@@ -49,8 +42,8 @@ export function speak(text: string, onEnd?: () => void) {
     utterance.voice = cachedVoice;
   }
 
-  utterance.rate = 0.95;    // calm & human
-  utterance.pitch = 1.2;    // feminine, not robotic
+  utterance.rate = 0.95;   
+  utterance.pitch = 1.2;   
   utterance.volume = 1.0;
 
   utterance.onend = () => {

@@ -1,5 +1,4 @@
 "use client"
-
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 
@@ -11,8 +10,11 @@ const Home = () => {
   const [started, setStarted] = useState(false)
 
   return (
-    <div className="relative h-screen w-screen bg-red-950 overflow-hidden">
-    <Navbar onHomeClick= {() => setStarted(false)}/>
+    <div className=" relative h-screen w-screen overflow-hidden">
+    <Navbar
+      started = {started} 
+      onHomeClick= {() => setStarted(false)}
+    />
       <AnimatePresence mode="wait">
         {!started ? (
           <motion.div
@@ -28,7 +30,7 @@ const Home = () => {
           <motion.div
             key="chat"
             initial={{ y: 200, opacity: 0 }}
-            animate={{ y: 70, opacity: 1 }}
+            animate={{ y: 60, opacity: 1 }}
             transition={{ duration: 0.6, ease: "easeInOut" }}
             className="absolute inset-0"
           >

@@ -1,27 +1,23 @@
-// import VoiceAgent from "@/components/VoiceAgent"
-
 import Home from "@/components/Home"
 
 const page = () => {
 
   return (
-    <div className="bg-red-950 relative overflow-hidden h-screen w-screen">
-            {/* <div className="absolute left-0 top-1/2 -translate-y-1/2 
-                      w-95 h-170 
-                      rounded-r-full 
-                      bg-red-600 
-                      blur-[120px] 
-                      z-10
-                      opacity-70" /> */}
-
-      {/* Right glow */}
-      {/* <div className="absolute right-0 top-1/2 -translate-y-1/2 
-                      w-95 h-170 
-                      rounded-l-full 
-                      bg-red-600 
-                      z-10
-                      blur-[120px] 
-                      opacity-70" /> */}
+    <div className="relative overflow-hidden h-screen w-screen">
+        <div
+        className="
+          pointer-events-none
+          absolute
+          top-[-30%]
+          left-1/2
+          -translate-x-1/2
+          w-[120%]
+          h-[70%]
+          rounded-full
+          bg-gray-800
+          blur-[120px]
+        "
+      />
       <Home/>
     </div>
   )

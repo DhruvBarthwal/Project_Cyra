@@ -14,13 +14,12 @@ export function useVoiceAgent( onMessage?: (role: "user" | "agent", text: string
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
     socketRef.current = createDeepgramSocket(async (finalText) => {
-      console.log("🧑 User:", finalText);
 
       onMessage?.("user", finalText);
 
       setListening(false);
 
-      console.log("➡️ PAYLOAD:", {
+      console.log("PAYLOAD:", {
         text: finalText,
         email_id: lastEmailIdRef.current,
       });
@@ -41,14 +40,12 @@ export function useVoiceAgent( onMessage?: (role: "user" | "agent", text: string
       );
 
       if (data.email_id) {
-        console.log("📌 Updating lastEmailId:", data.email_id);
         setLastEmailId(data.email_id);
       }
 
       if (typeof data.email_id === "string") {
-        console.log("📌 Updating lastEmailId:", data.email_id);
 
-        lastEmailIdRef.current = data.email_id; // 🔥 IMPORTANT
+        lastEmailIdRef.current = data.email_id; 
         setLastEmailId(data.email_id);
       }
 
@@ -57,15 +54,13 @@ export function useVoiceAgent( onMessage?: (role: "user" | "agent", text: string
         setLastEmailId(null);
       }
 
-      console.log("🤖 Alex:", data.response);
-
       onMessage?.("agent", data.response);
 
       speak(data.response);
     });
 
     socketRef.current.onopen = () => {
-      console.log("🎙️ Starting MediaRecorder");
+      console.log(" Starting MediaRecorder");
 
       mediaRecorder.current = new MediaRecorder(stream, {
         mimeType: "audio/webm;codecs=opus",
@@ -83,8 +78,6 @@ export function useVoiceAgent( onMessage?: (role: "user" | "agent", text: string
   }
 
   function stop() {
-    console.log("🛑 Stopping voice agent");
-
     mediaRecorder.current?.stop();
     mediaRecorder.current = null;
 
