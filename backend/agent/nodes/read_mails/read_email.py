@@ -52,6 +52,11 @@ def speak_summary(summary: dict) -> str:
 
 
 def read_email_node(state):
+    """
+    Read mails from inbox.
+    The tool reads one email at a time and summarize the long email.
+    This tool doesd NOT send, create or modify emails.
+    """
     service = get_gmail_service()
 
     # Load inbox once
