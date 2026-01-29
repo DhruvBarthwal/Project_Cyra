@@ -44,3 +44,14 @@ Works naturally with voice inputs
 - Undo delete (untrash)
 
 - Reset conversation anytime
+
+### Future Improvements
+
+-  Paid llm api for smooth working and better summarization
+
+-  LLM tool calling for majority nodes
+
+-  Message Pannel UI enhancement
+
+-  Pause command and Interruption Handling
+

@@ -84,6 +84,12 @@ def router(state: AgentState):
         if any(k in text for k in ["no", "cancel", "stop", "don't"]):
             return "RESET" 
         
+    if awaiting == "confirm_delete":
+        if any(k in text for k in ["yes", "confirm", "delete", "okay"]):
+            return "CONFIRM_DELETE"
+        if any(k in text for k in ["no", "cancel", "stop", "don't"]):
+            return "CANCEL_DELETE"
+        
     if state.get("intent") in ["NEXT_EMAIL", "PREV_EMAIL"]:
         if state.get("sender_filter"):
             return "READ_FILTERED_EMAILS"
@@ -146,7 +152,8 @@ def build_graph():
         {
             "READ_EMAIL": "read_email",
             "READ_FILTERED_EMAILS" : "read_filtered_emails",
-        
+            
+            "CONFIRM_DELETE" : "confirm_delete",
             "DELETE_EMAIL": "delete_email",
             "COMPOSE_EMAIL" : "compose_email",
             

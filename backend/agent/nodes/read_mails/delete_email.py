@@ -6,4 +6,5 @@ def delete_email_node(state):
         return state
     
     state["response"] = "Are you sure you want to delete this email?"
+    state["awaiting_field"] = "confirm_delete"
     return state
