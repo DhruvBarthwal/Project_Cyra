@@ -22,7 +22,7 @@ from agent.prompts import SYSTEM_PROMPT
 
 load_dotenv()
 
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_tokens=500)
+llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0, max_tokens=500)
 
 def get_tool_call_id(state: AgentState) -> str:
     messages = state.get("messages", [])
@@ -46,7 +46,7 @@ def read_mail(state: Annotated[AgentState, InjectedState()]):
         "email_body":   result.get("email_body", ""),
         "email_ids":    result.get("email_ids", state.get("email_ids", [])),
         "email_index":  result.get("email_index", state.get("email_index", 0)),
-        "navigation":   None,  # clear after use
+        "navigation":   None, 
         "messages": [ToolMessage(
             content=f"From: {result.get('email_from','unknown')}\nSubject: {result.get('email_subject','')}\nBody: {result.get('email_body','')[:800]}",
             tool_call_id=tool_call_id
@@ -88,17 +88,16 @@ def navigate_email(direction: str, state: Annotated[AgentState, InjectedState()]
     result = read_email_node(state)
 
     new_email_id = result.get("email_id", "")
-    print(f"NAVIGATE - direction: {direction}, new email_id: {new_email_id}, index: {result.get('email_index')}")
 
     content = f"From: {result.get('email_from','unknown')}\nSubject: {result.get('email_subject','')}\nBody: {result.get('email_body','')[:800]}"
 
     return Command(update={
-        "email_id":     new_email_id,           # ← new email's ID
+        "email_id":     new_email_id,          
         "email_from":   result.get("email_from", ""),
         "email_subject":result.get("email_subject", ""),
         "email_body":   result.get("email_body", ""),
         "email_ids":    result.get("email_ids", state.get("email_ids", [])),
-        "email_index":  result.get("email_index", 0),  # ← updated index
+        "email_index":  result.get("email_index", 0), 
         "navigation":   None,
         "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)]
     })
@@ -109,7 +108,6 @@ def delete_mail(state: Annotated[AgentState, InjectedState()]):
     tool_call_id = get_tool_call_id(state)
     email_id_to_delete = state.get("email_id", "")
     result = delete_email_node(state)
-    print(f"DELETE TOOL - saving email_id: {email_id_to_delete}")
     return Command(update={
         "email_id": "",
         "last_deleted_email_id": email_id_to_delete, 
@@ -121,7 +119,10 @@ def delete_mail(state: Annotated[AgentState, InjectedState()]):
 
 @tool
 def star_email(state: Annotated[AgentState, InjectedState()]):
-    """Star the currently selected email"""
+    """Add a star/bookmark to the current email.
+        Trigger words: 'star', 'starred', 'bookmark', 'mark', 'flag'.
+    """
+        
     tool_call_id = get_tool_call_id(state)
     result = star_email_node(state)
     return Command(update={
@@ -147,7 +148,6 @@ def unstar_email(state: Annotated[AgentState, InjectedState()]):
 def untrash_email(state: Annotated[AgentState, InjectedState()]):
     """Restore the last deleted email. Use when user says undo, restore, undelete."""
     tool_call_id = get_tool_call_id(state)
-    print(f"UNTRASH TOOL - last_deleted_email_id: {state.get('last_deleted_email_id')}")
     result = untrash_email_node(state)
     
     return Command(update={
@@ -223,7 +223,6 @@ def should_continue(state):
     messages = state["messages"]
     last = messages[-1]
 
-    # If waiting for confirmation, let LLM respond naturally
     if state.get("awaiting_field") == "confirm_delete":
         if hasattr(last, "tool_calls") and last.tool_calls:
             return "tools"

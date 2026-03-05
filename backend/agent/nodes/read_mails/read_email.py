@@ -38,7 +38,7 @@ def read_email_node(state):
         state["email_index"] = len(state["email_ids"]) - 1
         return {**state, "response": "no more emails"}
 
-    email_id = state["email_ids"][state["email_index"]]  # use updated index
+    email_id = state["email_ids"][state["email_index"]]  
     email = read_email_by_id(service, email_id)
 
     sender  = email.get("from", "unknown")
@@ -49,10 +49,10 @@ def read_email_node(state):
 
     return {
         **state,
-        "email_id":     email_id,       # ← this is the key field
+        "email_id":     email_id,      
         "email_from":   sender,
         "email_subject":subject,
         "email_body":   trimmed_body,
-        "email_index":  state["email_index"],  # ← persist updated index
+        "email_index":  state["email_index"],  
         "email_ids":    state["email_ids"],
     }
