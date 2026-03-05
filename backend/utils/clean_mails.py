@@ -68,6 +68,14 @@ def clean_email_text(text: str) -> str:
             break
     return text.strip()
 
+def clean_email_body(body: str) -> str:
+
+    if "<html" in body.lower():
+        text = html_to_clean_text(body)
+    else:
+        text = clean_email_text(body)
+
+    return text
 
 def extract_sender(user_input : str):
     text = user_input.lower()

@@ -1,15 +1,14 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from utils.schemas import VoiceInput
-from agent.graph import build_graph
-from utils.gmail_auth import get_gmail_service
-from utils.gmail_tools import delete_email
-
-SESSION = {}
+from agent.langgraph import build_graph
+from agent.prompts import SYSTEM_PROMPT
+import asyncio
 
 app = FastAPI()
 
@@ -30,25 +29,21 @@ def hello():
 
 @app.post("/voice")
 async def voice_input(payload: VoiceInput):
+    config = {"configurable": {"thread_id": "default"}}
 
-    session_id  = "default"
-    
-    prev_state = SESSION.get(session_id,{})
-    
-    new_state = {
-        **prev_state,
-        "user_input": payload.text,
-    }
-    
-    if payload.email_id is not None:
-        new_state["email_id"] = payload.email_id
-        
-    result = graph.invoke(new_state)
-    
-    SESSION[session_id] = result
-    
+    result = await asyncio.to_thread(
+    graph.invoke,
+    {"messages": [HumanMessage(content=payload.text)]},
+    config
+)
+
+    ai_messages = [
+        m for m in result["messages"]
+        if m.type == "ai" and m.content.strip()
+    ]
+    response_text = ai_messages[-1].content if ai_messages else "Sorry, I didn't get that."
+
     return {
-        "response": result.get("response"),
+        "response": response_text,
         "email_id": result.get("email_id"),
     }
-        

@@ -12,5 +12,6 @@ google-auth-oauthlib
 pydantic
 google-genai
 beautifulsoup4
-transformers torch
+transformers 
+torch
 pydantic

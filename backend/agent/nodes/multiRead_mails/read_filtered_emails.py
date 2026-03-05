@@ -1,6 +1,6 @@
 from utils.gmail_auth import get_gmail_service
 from utils.gmail_tools import read_email_by_id
-from utils.summarize import summarize_email
+
 
 SMALL_EMAIL_LIMIT = 300
 
@@ -31,7 +31,7 @@ def speak_summary(summary: dict) -> str:
 
     purpose = summary.get("Purpose")
     if purpose:
-        parts.append(f"Basically, it’s  {purpose.lower()}.")
+        parts.append(f"Basically, it's  {purpose.lower()}.")
 
     key_points = summary.get("Key points", [])
     if key_points:
@@ -40,7 +40,7 @@ def speak_summary(summary: dict) -> str:
 
     deadline = normalize_field(
         summary.get("Deadlines"),
-        "There’s no deadline mentioned."
+        "There's no deadline mentioned."
     )
     parts.append(deadline)
 
@@ -66,7 +66,7 @@ def read_filtered_emails_node(state):
         email_ids = [m["id"] for m in results.get("messages", [])]
 
         if not email_ids:
-            state["response"] = f"I couldn’t find any emails from {sender}."
+            state["response"] = f"I couldn't find any emails from {sender}."
             return state
 
         state["email_ids"] = email_ids
@@ -105,7 +105,7 @@ def read_filtered_emails_node(state):
     if is_image_based(body):
         state["response"] = (
             f"This email from {sender_name} is about {subject}. "
-            "It mostly contains images, so I can’t read it out. "
+            "It mostly contains images, so I can't read it out. "
             "…\n\n"
             "Would you like the next email or the previous one?"
         )
@@ -113,23 +113,23 @@ def read_filtered_emails_node(state):
 
     if len(body) <= SMALL_EMAIL_LIMIT:
         state["response"] = (
-            f"Here’s an email from {sender_name}. "
-            f"It’s about {subject}. "
+            f"Here's an email from {sender_name}. "
+            f"It's about {subject}. "
             f"{body}. "
             "…\n\n"
             "What would you like to do next? Say next email or previous."
         )
         return state
 
-    summary = summarize_email(body)
-    spoken_summary = speak_summary(summary)
+    # summary = summarize_email(body)
+    # spoken_summary = speak_summary(summary)
 
-    state["response"] = (
-        f"This one’s from {sender_name}. "
-        f"It’s about {subject}. "
-        f"{spoken_summary} "
-        "…\n\n"
-        "What would you like to do next? Say next email or previous."
-    )
+    # state["response"] = (
+    #     f"This one's from {sender_name}. "
+    #     f"It's about {subject}. "
+    #     f"{spoken_summary} "
+    #     "…\n\n"
+    #     "What would you like to do next? Say next email or previous."
+    # )
 
     return state

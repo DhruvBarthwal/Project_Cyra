@@ -1,9 +1,10 @@
-from typing import TypedDict, Optional, List
+from typing import Optional, List, Annotated, Sequence
+from typing_extensions import TypedDict
 from pydantic import BaseModel, Field
-
-
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 class AgentState(TypedDict, total=False):
-    user_input : str
+    messages : Annotated[Sequence[BaseMessage], add_messages]
     intent : str
     
     #email reading

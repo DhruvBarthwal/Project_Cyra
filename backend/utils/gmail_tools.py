@@ -79,7 +79,7 @@ def read_latest_email(service):
 
 
 
-def delete_email(service, msg_id):
+def trash_email(service, msg_id):
     service.users().messages().trash(
         userId="me",
         id=msg_id
@@ -154,7 +154,14 @@ def read_email_by_id(service, email_id):
         return ""
 
     body = extract_body(msg["payload"]) or ""
+    print("\n========== EMAIL DEBUG ==========")
+    print("EMAIL ID:", email_id)
+    print("SUBJECT:", subject)
+    print("BODY LENGTH:", len(body))
 
+    print("\nBODY PREVIEW:")
+    print(body)
+    
     return {
         "from": from_email,
         "subject": subject,
