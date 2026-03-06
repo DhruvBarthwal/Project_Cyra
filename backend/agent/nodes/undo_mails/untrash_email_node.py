@@ -7,7 +7,7 @@ def untrash_email_node(state):
     print(f"UNTRASH NODE - last_deleted_email_id: {email_id}")
     
     if not email_id:
-        state["response"] = "No recently deleted email to restore."
+        state["response"] = "There is no recently deleted email to restore. Please delete an email first before trying to restore."
         return state
     
     service = get_gmail_service()
@@ -15,6 +15,6 @@ def untrash_email_node(state):
     
     state["email_id"] = email_id
     state["last_deleted_email_id"] = None
-    state["response"] = "Email restored from trash."
+    state["response"] = "I have restored the email from trash. What would you like to do next?"
     
     return state

@@ -1,28 +1,22 @@
 import base64
-from email.message import EmailMessage
-from utils.clean_mails import html_to_clean_text , clean_email_text
+import threading
+from functools import lru_cache
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from utils.clean_mails import html_to_clean_text, clean_email_text
+
 
 def extract_body(payload, depth=0):
     indent = "  " * depth
     mime_type = payload.get("mimeType", "")
     body_data = payload.get("body", {}).get("data")
 
-    if body_data:
-        print(f"{indent} Found body data (length={len(body_data)})")
-
     if mime_type == "text/plain" and body_data:
-        text = base64.urlsafe_b64decode(
-            body_data
-        ).decode("utf-8", errors="ignore")
-        return text
+        return base64.urlsafe_b64decode(body_data).decode("utf-8", errors="ignore")
 
     if mime_type == "text/html" and body_data:
-        text = base64.urlsafe_b64decode(
-            body_data
-        ).decode("utf-8", errors="ignore")
-        return text
+        html = base64.urlsafe_b64decode(body_data).decode("utf-8", errors="ignore")
+        return html_to_clean_text(html)
 
     for part in payload.get("parts", []):
         result = extract_body(part, depth + 1)
@@ -44,7 +38,6 @@ def read_latest_email(service):
         return None
 
     msg_id = messages[0]["id"]
-
     msg = service.users().messages().get(
         userId="me",
         id=msg_id,
@@ -52,8 +45,7 @@ def read_latest_email(service):
     ).execute()
 
     headers = msg["payload"].get("headers", [])
-    sender = ""
-    subject = ""
+    sender = subject = ""
 
     for h in headers:
         if h["name"] == "From":
@@ -62,47 +54,14 @@ def read_latest_email(service):
             subject = h["value"]
 
     raw_body = extract_body(msg["payload"])
-
-    if "<html" in raw_body.lower():
-        body = html_to_clean_text(raw_body)
-    else:
-        body = clean_email_text(raw_body)
-
-    body = body[:500]  
+    body = html_to_clean_text(raw_body) if "<html" in raw_body.lower() else clean_email_text(raw_body)
 
     return {
         "id": msg_id,
         "from": sender,
         "subject": subject,
-        "body": body.strip()
+        "body": body[:500].strip()
     }
-
-
-
-def trash_email(service, msg_id):
-    service.users().messages().trash(
-        userId="me",
-        id=msg_id
-    ).execute()
-
-
-def send_email(service, to, subject, body):
-    message = MIMEMultipart()
-    message["to"] = to
-    message["subject"] = subject
-    
-    message.attach(MIMEText(body, "plain"))
-    
-    raw = base64.urlsafe_b64encode(
-        message.as_bytes()
-    ).decode()
-    
-    service.users().messages().send(
-        userId = "me",
-        body = {"raw" : raw}
-    ).execute()
-
-import base64
 
 
 def list_inbox_email_ids(service, limit=10):
@@ -111,11 +70,15 @@ def list_inbox_email_ids(service, limit=10):
         labelIds=["INBOX"],
         maxResults=limit
     ).execute()
-
     return [m["id"] for m in msgs.get("messages", [])]
 
 
-def read_email_by_id(service, email_id):
+@lru_cache(maxsize=50)
+def _fetch_email_cached(email_id: str):
+    """Cached internal fetcher — avoids repeat Gmail API calls for same email."""
+    from utils.gmail_auth import get_gmail_service
+    service = get_gmail_service()
+
     msg = service.users().messages().get(
         userId="me",
         id=email_id,
@@ -131,69 +94,125 @@ def read_email_by_id(service, email_id):
         elif h["name"].lower() == "from":
             from_email = h["value"]
 
-    def extract_body(payload):
-        # Prefer plain text
+    def _extract(payload):
         if payload.get("mimeType") == "text/plain":
             data = payload["body"].get("data")
             if data:
-                return base64.urlsafe_b64decode(data).decode("utf-8")
-
-        # Fallback to HTML
+                return base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
         if payload.get("mimeType") == "text/html":
             data = payload["body"].get("data")
             if data:
-                html = base64.urlsafe_b64decode(data).decode("utf-8")
+                html = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
                 return clean_email_text(html)
-
-        # Recurse
         for part in payload.get("parts", []):
-            result = extract_body(part)
+            result = _extract(part)
             if result:
                 return result
-
         return ""
 
-    body = extract_body(msg["payload"]) or ""
+    body = _extract(msg["payload"]) or ""
+
     print("\n========== EMAIL DEBUG ==========")
     print("EMAIL ID:", email_id)
     print("SUBJECT:", subject)
     print("BODY LENGTH:", len(body))
-
     print("\nBODY PREVIEW:")
-    print(body)
-    
+    print(body[:300])
+
     return {
         "from": from_email,
         "subject": subject,
-        "body": body[:500].strip() 
+        "body": body
     }
 
 
-def star_email(service, email_id):
-    service.users().messages().modify(
-        userId = "me",
-        id = email_id,
-        body={
-            "addLabelIds": ["STARRED"],
-            "removeLabelIds": []
-        }
+def read_email_by_id(service, email_id: str):
+    """Public function — uses cache internally."""
+    return _fetch_email_cached(email_id)
+
+
+def _prefetch_single(email_id: str):
+    try:
+        _fetch_email_cached(email_id)
+    except Exception:
+        pass
+
+def prefetch_next_email(email_ids: list, current_index: int):
+    """Prefetch next AND prev email in background."""
+    to_prefetch = []
+    
+    if current_index + 1 < len(email_ids):
+        to_prefetch.append(email_ids[current_index + 1])
+    if current_index - 1 >= 0:
+        to_prefetch.append(email_ids[current_index - 1])
+    
+    for email_id in to_prefetch:
+        threading.Thread(
+            target=_prefetch_single,
+            args=(email_id,),
+            daemon=True
+        ).start()
+
+
+
+def trash_email(service, msg_id):
+    service.users().messages().trash(
+        userId="me",
+        id=msg_id
     ).execute()
+    _fetch_email_cached.cache_clear()  
+
+
+def send_email(service, to, subject, body):
+    message = MIMEMultipart()
+    message["to"] = to
+    message["subject"] = subject
+    message.attach(MIMEText(body, "plain"))
+
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    service.users().messages().send(
+        userId="me",
+        body={"raw": raw}
+    ).execute()
+
+
+def star_email(service, email_id):
+    try:
+        result = service.users().messages().modify(
+            userId="me",
+            id=email_id,
+            body={
+                "addLabelIds": ["STARRED"],
+                "removeLabelIds": []
+            }
+        ).execute()
+        print(f"STAR SUCCESS - email_id: {email_id}, labels: {result.get('labelIds', [])}")
+        return result
+    except Exception as e:
+        print(f"STAR FAILED - email_id: {email_id}, error: {e}")
+        raise
 
 def unstar_email(service, email_id):
-    service.users().messages().modify(
-        userId = "me",
-        id = email_id,
-        body ={
-            "addLabelIds" : [],
-            "removeLabelIds" : ["STARRED"]
-        }
-    ).execute()
+    try:
+        result = service.users().messages().modify(
+            userId="me",
+            id=email_id,
+            body={
+                "addLabelIds": [],
+                "removeLabelIds": ["STARRED"]
+            }
+        ).execute()
+        print(f"UNSTAR SUCCESS - email_id: {email_id}")
+        return result
+    except Exception as e:
+        print(f"UNSTAR FAILED - email_id: {email_id}, error: {e}")
+        raise
 
-def untrash_email(service,email_id):
+
+def untrash_email(service, email_id):
     service.users().messages().modify(
-        userId = "me",
-        id = email_id,
-        body = {
-            "removeLabelIds" : ["TRASH"]
-        }
+        userId="me",
+        id=email_id,
+        body={"removeLabelIds": ["TRASH"]}
     ).execute()
+    _fetch_email_cached.cache_clear()  

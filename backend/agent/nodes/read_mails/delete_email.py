@@ -5,7 +5,7 @@ def delete_email_node(state):
     email_id = state.get("email_id","")
     
     if not email_id:
-        state["response"] = "No email selected to delete."
+        state["response"] = "There is no email selected to delete. Please select an email first."
         return state
 
     service = get_gmail_service()
@@ -13,5 +13,5 @@ def delete_email_node(state):
     
     state["last_deleted_email_id"] = email_id
     state["email_id"] = ""
-    state["response"] = "Email deleted. Say undo to restore it."
+    state["response"] = "I have deleted the email. What would you like to do next?"
     return state

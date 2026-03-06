@@ -1,4 +1,4 @@
-from utils.gmail_tools import read_email_by_id, list_inbox_email_ids
+from utils.gmail_tools import read_email_by_id, list_inbox_email_ids, prefetch_next_email
 from utils.gmail_auth import get_gmail_service
 from utils.clean_mails import clean_email_body
 
@@ -46,6 +46,8 @@ def read_email_node(state):
     raw_body = email.get("body", "")
     body = clean_email_body(raw_body)
     trimmed_body = body[:4000] if len(body) > 4000 else body
+    
+    prefetch_next_email(state["email_ids"], state["email_index"])
 
     return {
         **state,

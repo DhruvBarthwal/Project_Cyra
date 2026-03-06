@@ -1,6 +1,6 @@
 from langchain_groq import ChatGroq
 from langchain_core.tools import tool
-from langchain_core.messages import SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage, ToolMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, InjectedState
 from langgraph.checkpoint.memory import MemorySaver
@@ -15,22 +15,20 @@ from agent.nodes.read_mails.delete_email import delete_email_node
 from agent.nodes.star_mails.star_email_node import star_email_node
 from agent.nodes.star_mails.unstar_email_node import unstar_email_node
 from agent.nodes.undo_mails.untrash_email_node import untrash_email_node
-from agent.nodes.undo_mails.cancel_delete import cancel_delete_node
 from agent.nodes.undo_mails.reset_email import reset_node
 from agent.nodes.send_mails.send_mail import send_email_node
 from agent.prompts import SYSTEM_PROMPT
 
 load_dotenv()
 
-llm = ChatGroq(model="llama-3.1-8b-instant", temperature=0, max_tokens=500)
+llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, max_tokens=500)
 
 def get_tool_call_id(state: AgentState) -> str:
     messages = state.get("messages", [])
-    last_ai = next((m for m in reversed(messages) if m.type == "ai"), None)
-    if last_ai and last_ai.tool_calls:
-        return last_ai.tool_calls[0]["id"]
+    for m in reversed(messages):
+        if m.type == "ai" and hasattr(m, "tool_calls") and m.tool_calls:
+            return m.tool_calls[0]["id"]
     return "unknown"
-
 
 @tool
 def read_mail(state: Annotated[AgentState, InjectedState()]):
@@ -119,11 +117,12 @@ def delete_mail(state: Annotated[AgentState, InjectedState()]):
 
 @tool
 def star_email(state: Annotated[AgentState, InjectedState()]):
-    """Add a star/bookmark to the current email.
-        Trigger words: 'star', 'starred', 'bookmark', 'mark', 'flag'.
+    """Add a star to the current email.
+    Trigger words: 'star', 'mark', 'mark important', 'bookmark', 'flag', 'important'.
+    Do NOT read the email, just star it.
     """
-        
     tool_call_id = get_tool_call_id(state)
+    print(f"STAR TOOL - email_id: {state.get('email_id')}, index: {state.get('email_index')}")
     result = star_email_node(state)
     return Command(update={
         "messages": [ToolMessage(
@@ -131,7 +130,6 @@ def star_email(state: Annotated[AgentState, InjectedState()]):
             tool_call_id=tool_call_id
         )]
     })
-
 @tool
 def unstar_email(state: Annotated[AgentState, InjectedState()]):
     """Unstar the currently selected email"""
@@ -188,21 +186,9 @@ def reset_convo(state: Annotated[AgentState, InjectedState()]):
         )]
     })
 
-@tool
-def cancel_delete(state: Annotated[AgentState, InjectedState()]):
-    """Cancel a pending delete"""
-    tool_call_id = get_tool_call_id(state)
-    result = cancel_delete_node(state)
-    return Command(update={
-        "awaiting_field": None,
-        "messages": [ToolMessage(
-            content=result.get("response", "done"),
-            tool_call_id=tool_call_id
-        )]
-    })
     
     
-tools = [read_mail, read_filtered_mails, navigate_email,delete_mail, star_email, unstar_email, untrash_email, send_email, reset_convo, cancel_delete]
+tools = [read_mail, read_filtered_mails, navigate_email,delete_mail, star_email, unstar_email, untrash_email, send_email, reset_convo]
 
 llm_with_tools = llm.bind_tools(tools)
 tool_node = ToolNode(tools)
@@ -210,40 +196,46 @@ tool_node = ToolNode(tools)
 
 def call_llm(state: AgentState):
     messages = list(state["messages"])
-    
     system = [SystemMessage(content=SYSTEM_PROMPT)]
-
     non_system = [m for m in messages if m.type != "system"]
-    trimmed = system + non_system[-10:]
+    trimmed = system + non_system[-6:]
 
     response = llm_with_tools.invoke(trimmed)
+   
+    if not response.content and not response.tool_calls:
+        response = AIMessage(content="I can help you read, delete, star, or send emails. What would you like to do?")
+    
     return {"messages": [response]}
+
+
+SIMPLE_TOOLS = {"delete_mail", "star_email", "unstar_email", "untrash_email", "reset_convo"}
 
 def should_continue(state):
     messages = state["messages"]
     last = messages[-1]
 
-    if state.get("awaiting_field") == "confirm_delete":
-        if hasattr(last, "tool_calls") and last.tool_calls:
-            return "tools"
-        return END
-
-    last_human_idx = max(
-        (i for i, m in enumerate(messages) if m.type == "human"),
-        default=0
-    )
-    tool_calls_this_turn = sum(
-        1 for m in messages[last_human_idx:]
-        if hasattr(m, "tool_calls") and m.tool_calls
-    )
-
-    if tool_calls_this_turn >= 1 and not (hasattr(last, "tool_calls") and last.tool_calls):
-        return END
-
     if hasattr(last, "tool_calls") and last.tool_calls:
         return "tools"
 
     return END
+
+
+def after_tools(state):
+    """Decide where to go after tool execution."""
+    messages = state["messages"]
+    
+    last_ai_with_tool = next(
+        (m for m in reversed(messages)
+         if m.type == "ai" and hasattr(m, "tool_calls") and m.tool_calls),
+        None
+    )
+    
+    if last_ai_with_tool:
+        tool_name = last_ai_with_tool.tool_calls[0]["name"]
+        if tool_name in SIMPLE_TOOLS:
+            return END  
+    
+    return "llm"  
 
 def build_graph():
     graph = StateGraph(AgentState)
@@ -251,5 +243,7 @@ def build_graph():
     graph.add_node("tools", tool_node)
     graph.add_conditional_edges("llm", should_continue)
     graph.set_entry_point("llm")
-    graph.add_edge("tools", "llm")
+ 
+    graph.add_conditional_edges("tools", after_tools)  
+    
     return graph.compile(checkpointer=MemorySaver())
