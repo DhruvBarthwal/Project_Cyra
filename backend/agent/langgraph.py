@@ -1,4 +1,5 @@
 from numpy import rint
+import re
 
 from langchain_groq import ChatGroq
 from langchain_core.tools import tool
@@ -18,7 +19,7 @@ from agent.nodes.star_mails.star_email_node import star_email_node
 from agent.nodes.star_mails.unstar_email_node import unstar_email_node
 from agent.nodes.undo_mails.untrash_email_node import untrash_email_node
 from agent.nodes.undo_mails.reset_email import reset_node
-from agent.nodes.send_mails.send_mail import send_email_node, generate_email_draft, enhance_email_draft
+from agent.nodes.send_mails.send_mail import send_email_node, generate_email_draft, enhance_email_draft, summarize_email
 from agent.prompts import SYSTEM_PROMPT
 
 load_dotenv()
@@ -32,26 +33,37 @@ def get_tool_call_id(state: AgentState) -> str:
             return m.tool_calls[0]["id"]
     return "unknown"
 
+def _strip_emoji(text: str) -> str:
+    return re.sub(r'[^\x00-\x7F]+', '', text).strip()
+
+
 @tool
 def read_mail(state: Annotated[AgentState, InjectedState()]):
-    """Read emails from inbox. Also handles next/previous navigation.
-    Use for: read mail, next email, previous email, go back, go forward."""
+    """Read emails from inbox.
+    Use for: read mail, check inbox, what's in my email."""
     tool_call_id = get_tool_call_id(state)
     result = read_email_node(state)
 
+    subject = result.get("email_subject", "")
+    sender = result.get("email_from", "unknown")
+    body = result.get("email_body", "")
+
+    summary = summarize_email(subject, sender, body)
+
     return Command(update={
-        "email_id":     result.get("email_id", ""),
-        "email_from":   result.get("email_from", ""),
-        "email_subject":result.get("email_subject", ""),
-        "email_body":   result.get("email_body", ""),
-        "email_ids":    result.get("email_ids", state.get("email_ids", [])),
-        "email_index":  result.get("email_index", state.get("email_index", 0)),
-        "navigation":   None, 
+        "email_id":      result.get("email_id", ""),
+        "email_from":    sender,
+        "email_subject": subject,
+        "email_body":    body,
+        "email_ids":     result.get("email_ids", state.get("email_ids", [])),
+        "email_index":   result.get("email_index", state.get("email_index", 0)),
+        "navigation":    None,
         "messages": [ToolMessage(
-            content=f"From: {result.get('email_from','unknown')}\nSubject: {result.get('email_subject','')}\nBody: {result.get('email_body','')[:800]}",
+            content=summary,
             tool_call_id=tool_call_id
         )]
     })
+
 
 @tool
 def read_filtered_mails(sender: str, state: Annotated[AgentState, InjectedState()]):
@@ -62,16 +74,24 @@ def read_filtered_mails(sender: str, state: Annotated[AgentState, InjectedState(
     state["email_index"] = 0
     result = read_filtered_emails_node(state)
 
+    subject = result.get("email_subject", "")
+    email_from = result.get("email_from", "unknown")
+    body = result.get("email_body", "")
+    if body:
+        summary = summarize_email(subject, email_from, body)
+    else:
+        summary = result.get("response", "No emails found.")
+
     return Command(update={
-        "email_id":     result.get("email_id", ""),
-        "email_from":   result.get("email_from", ""),
-        "email_subject":result.get("email_subject", ""),
-        "email_body":   result.get("email_body", ""),
-        "email_ids":    result.get("email_ids", []),
-        "email_index":  result.get("email_index", 0),
+        "email_id":      result.get("email_id", ""),
+        "email_from":    email_from,
+        "email_subject": subject,
+        "email_body":    body,
+        "email_ids":     result.get("email_ids", []),
+        "email_index":   result.get("email_index", 0),
         "sender_filter": sender,
         "messages": [ToolMessage(
-            content=result.get("response", "done"),
+            content=summary,
             tool_call_id=tool_call_id
         )]
     })
@@ -79,32 +99,35 @@ def read_filtered_mails(sender: str, state: Annotated[AgentState, InjectedState(
 @tool
 def navigate_email(direction: str, state: Annotated[AgentState, InjectedState()]):
     """Navigate to next or previous email.
-    Use when user says: next email, previous email, go back, go forward.
     direction must be exactly 'next' or 'prev'
     """
     tool_call_id = get_tool_call_id(state)
-
     state["navigation"] = direction if direction in ["next", "prev"] else "next"
     result = read_email_node(state)
 
-    new_email_id = result.get("email_id", "")
+    subject = result.get("email_subject", "")
+    sender = result.get("email_from", "unknown")
+    body = result.get("email_body", "")
 
-    content = f"From: {result.get('email_from','unknown')}\nSubject: {result.get('email_subject','')}\nBody: {result.get('email_body','')[:800]}"
+    from agent.nodes.send_mails.send_mail import summarize_email
+    summary = summarize_email(subject, sender, body)
 
     return Command(update={
-        "email_id":     new_email_id,          
-        "email_from":   result.get("email_from", ""),
-        "email_subject":result.get("email_subject", ""),
-        "email_body":   result.get("email_body", ""),
-        "email_ids":    result.get("email_ids", state.get("email_ids", [])),
-        "email_index":  result.get("email_index", 0), 
-        "navigation":   None,
-        "messages": [ToolMessage(content=content, tool_call_id=tool_call_id)]
+        "email_id":      result.get("email_id", ""),
+        "email_from":    sender,
+        "email_subject": subject,
+        "email_body":    body,
+        "email_ids":     result.get("email_ids", state.get("email_ids", [])),
+        "email_index":   result.get("email_index", 0),
+        "navigation":    None,
+        "messages": [ToolMessage(content=summary, tool_call_id=tool_call_id)]
     })
     
 @tool
 def delete_mail(state: Annotated[AgentState, InjectedState()]):
-    """Delete the currently selected email."""
+    """DELETE the current email. Call this when user says delete, remove, trash, get rid of.
+    NEVER read the email first. Call this DIRECTLY.
+    """
     tool_call_id = get_tool_call_id(state)
     email_id_to_delete = state.get("email_id", "")
     result = delete_email_node(state)
@@ -119,9 +142,8 @@ def delete_mail(state: Annotated[AgentState, InjectedState()]):
 
 @tool
 def star_email(state: Annotated[AgentState, InjectedState()]):
-    """Add a star to the current email.
-    Trigger words: 'star', 'mark', 'mark important', 'bookmark', 'flag', 'important'.
-    Do NOT read the email, just star it.
+    """DELETE the current email. Call this when user says delete, remove, trash, get rid of.
+    NEVER read the email first. Call this DIRECTLY.
     """
     tool_call_id = get_tool_call_id(state)
     print(f"STAR TOOL - email_id: {state.get('email_id')}, index: {state.get('email_index')}")
@@ -160,45 +182,25 @@ def untrash_email(state: Annotated[AgentState, InjectedState()]):
     })
 
 
-@tool
-def reset_convo(state: Annotated[AgentState, InjectedState()]):
-    """Reset conversation. ONLY when user EXPLICITLY says 'reset' or 'start over'."""
-    tool_call_id = get_tool_call_id(state)
-    result = reset_node(state)
-    return Command(update={
-        "email_id":      "",
-        "email_ids":     [],
-        "email_index":   0,
-        "sender_filter": None,
-        "awaiting_field": None,
-        "send_step":     "",      
-        "draft_subject": "",
-        "draft_body":    "",
-        "send_to":       "",
-        "messages": [ToolMessage(
-            content=result.get("response", "done"),
-            tool_call_id=tool_call_id
-        )]
-    })
     
 @tool
 def send_email_flow(topic: str, state: Annotated[AgentState, InjectedState()]):
     """Handle entire email sending flow.
     ALWAYS call with topic = the user's EXACT message, word for word.
-    Use for: write email, compose, send mail, create mail, enhance, yes, no, any email address.
+    Use for: write email, compose, create mail, draft, enhance, yes, no, any email address.
     topic = user's exact words. NEVER leave topic empty.
-    Always use sender name : Dhruv
     """
     tool_call_id = get_tool_call_id(state)
     step = state.get("send_step", "")
     new_email_keywords = ["create a mail", "compose", "write a mail", "write an email", 
-                          "create an email", "send a mail", "send an email", "draft"]
+                          "create an email", "draft"]
     if any(kw in topic.lower() for kw in new_email_keywords):
         step = ""
     print(f"SEND FLOW - step: '{step}', topic: '{topic}'")
 
     if not step or step == "":
         draft = generate_email_draft(topic)
+        draft["subject"] = _strip_emoji(draft["subject"])
         body_preview = draft["body"][:500] + "..." if len(draft["body"]) > 500 else draft["body"]
     
         response = f"Here's your draft. Subject: {draft['subject']}. {body_preview}. Say enhance to improve, or tell me who to send it to."
@@ -218,6 +220,7 @@ def send_email_flow(topic: str, state: Annotated[AgentState, InjectedState()]):
         ]
     ):
         draft = enhance_email_draft(state.get("draft_body", ""), topic)
+        draft["subject"] = _strip_emoji(draft["subject"])
         body_preview = draft["body"][:500] + "..." if len(draft["body"]) > 500 else draft["body"]
     
         response = f"Enhanced. Subject: {draft['subject']}. {body_preview}. Who should I send this to?"
@@ -295,6 +298,10 @@ def _parse_email(spoken: str) -> str:
         if spoken.startswith(prefix):
             spoken = spoken[len(prefix):].strip()
             break
+        
+    spoken = re.sub(r'\b([a-z])\s(?=[a-z]\b)', r'\1', spoken)
+    spoken = re.sub(r'\b([a-z])\s(?=[a-z]\b)', r'\1', spoken)
+    print(f"PARSE DEBUG after spacing fix: '{spoken}'") 
 
     if "@" in spoken and "." in spoken.split("@")[-1]:
         return spoken.strip().rstrip(".,!? ")  
@@ -341,7 +348,7 @@ def _parse_email(spoken: str) -> str:
     
     
 tools = [read_mail, read_filtered_mails, navigate_email, delete_mail, star_email, unstar_email, 
-         untrash_email, send_email_flow, reset_convo]
+         untrash_email, send_email_flow]
 
 llm_with_tools = llm.bind_tools(tools)
 tool_node = ToolNode(tools)
@@ -353,25 +360,50 @@ def call_llm(state: AgentState):
     send_step = state.get("send_step", "")
     print(f"CALL LLM - send_step: '{send_step}', last human: '{[m.content for m in messages if m.type == 'human'][-1:]}'")
     print(f"CALL LLM - tool response in state: {state.get('draft_subject', 'NO DRAFT')}")
+    
     state_context = ""
     if send_step == "awaiting_recipient":
-        state_context = "\n\nCURRENT STATE: Email draft is ready. send_step=awaiting_recipient. User's next message is either an enhancement request OR a recipient. Call send_email_flow with topic = user's message."
+        state_context = "\n\nCURRENT STATE: Email draft is ready. send_step=awaiting_recipient. You MUST call send_email_flow with topic = user's exact message. Do NOT respond without calling send_email_flow."
     elif send_step == "confirm_send":
-        state_context = f"\n\nCURRENT STATE: Ready to send to {state.get('send_to','')}. send_step=confirm_send. Call send_email_flow with topic = user's message (yes/no)."
+        state_context = (
+            f"\n\nCURRENT STATE: send_step=confirm_send. Email ready to send to {state.get('send_to','')}."
+            f"\nYou MUST call send_email_flow with topic = user's exact message."
+            f"\nDo NOT say anything without calling send_email_flow first."
+        )
     
     system = [SystemMessage(content=SYSTEM_PROMPT + state_context)]
-    non_system = [m for m in messages if m.type != "system"]
-    trimmed = system + non_system[-6:]
+    
+    human_only = [m for m in messages if m.type == "human"][-4:]
+    trimmed = system + human_only
 
     response = llm_with_tools.invoke(trimmed)
     
     if not response.content and not response.tool_calls:
-        response = AIMessage(content="I can help with emails. What would you like to do?")
+ 
+        if send_step in ("awaiting_recipient", "confirm_send"):
+            last_human = next((m for m in reversed(messages) if m.type == "human"), None)
+            topic = last_human.content if last_human else ""
+            response = AIMessage(
+                content="",
+                tool_calls=[{
+                    "name": "send_email_flow",
+                    "args": {"topic": topic},
+                    "id": "forced_call",
+                    "type": "tool_call"
+                }]
+            )
+        else:
+            response = AIMessage(content="I can help with emails. What would you like to do?")
     
     return {"messages": [response]}
 
 
-SIMPLE_TOOLS = {"delete_mail", "star_email", "unstar_email", "untrash_email", "reset_convo","send_email_flow"}
+SIMPLE_TOOLS = {
+    "delete_mail", "star_email", "unstar_email", "untrash_email",
+    "send_email_flow",
+    "read_mail", "read_filtered_mails",   
+    "navigate_email",                     
+}
 
 def should_continue(state):
     messages = state["messages"]
@@ -409,4 +441,4 @@ def build_graph():
  
     graph.add_conditional_edges("tools", after_tools)  
     
-    return graph.compile(checkpointer=MemorySaver())
+    return graph.compile()

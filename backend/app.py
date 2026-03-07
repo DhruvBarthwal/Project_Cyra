@@ -1,13 +1,13 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from utils.schemas import VoiceInput
 from agent.langgraph import build_graph
-from agent.prompts import SYSTEM_PROMPT
+from agent.state import AgentState
 import asyncio
 
 app = FastAPI()
@@ -21,7 +21,7 @@ app.add_middleware(
 )
 
 graph = build_graph()
-
+agent_state: AgentState = {} 
 
 @app.get("/")
 def hello():
@@ -29,23 +29,25 @@ def hello():
 
 @app.post("/voice")
 async def voice_input(payload: VoiceInput):
-    
-    print(f">>> RECEIVED: '{payload.text}'")  
-    config = {"configurable": {"thread_id": "default"}}
-    result = await asyncio.to_thread(
-        graph.invoke,
-        {"messages": [HumanMessage(content=payload.text)]},
-        config
-    )
+    global agent_state
+    print(f">>> RECEIVED: '{payload.text}'")
+
+    input_state = {
+        **agent_state,
+        "messages": [HumanMessage(content=payload.text)]
+    }
+
+    result = await asyncio.to_thread(graph.invoke, input_state) 
+
+    agent_state = {k: v for k, v in result.items() if k != "messages"}
 
     messages = result["messages"]
-    
     last_human_idx = max(
         (i for i, m in enumerate(messages) if m.type == "human"),
         default=0
     )
     messages_this_turn = messages[last_human_idx + 1:]
-    
+
     print(f"MESSAGES THIS TURN: {[(m.type, m.content[:50] if m.content else '') for m in messages_this_turn]}")
 
     last_ai_with_tool = next(
@@ -53,11 +55,11 @@ async def voice_input(payload: VoiceInput):
          if m.type == "ai" and hasattr(m, "tool_calls") and m.tool_calls),
         None
     )
-    
+
     if last_ai_with_tool:
         tool_name = last_ai_with_tool.tool_calls[0]["name"]
         tool_call_id = last_ai_with_tool.tool_calls[0]["id"]
-    
+
         tool_response = next(
             (m for m in messages_this_turn
              if m.type == "tool" and m.tool_call_id == tool_call_id),
@@ -65,8 +67,8 @@ async def voice_input(payload: VoiceInput):
         )
         ai_after_tool = next(
             (m for m in reversed(messages_this_turn)
-            if m.type == "ai" and m.content and m.content.strip()
-            and not (hasattr(m, "tool_calls") and m.tool_calls)),
+             if m.type == "ai" and m.content and m.content.strip()
+             and not (hasattr(m, "tool_calls") and m.tool_calls)),
             None
         )
 
@@ -90,3 +92,9 @@ async def voice_input(payload: VoiceInput):
         "response": response_text,
         "email_id": result.get("email_id"),
     }
+
+@app.post("/reset")
+async def reset():
+    global agent_state
+    agent_state = {}  
+    return {"status": "reset"}

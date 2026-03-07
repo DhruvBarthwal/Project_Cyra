@@ -11,6 +11,7 @@ def generate_email_draft(topic: str) -> dict:
         Rules:
         - Do NOT assume or invent any names, use generic placeholders like [Name] or [Recipient]
         - Do NOT use the name "Alex" or any other specific name unless mentioned in the topic
+        - Sign the email as "Dhruv" — always use this as the sender name
         - Keep it concise and natural
 
         Return ONLY in this exact format with no extra text:
@@ -90,3 +91,14 @@ def send_email_node(state):
     state["response"] = f"Email sent to {to}."
     
     return state
+
+def summarize_email(subject: str, sender: str, body: str) -> str:
+    response = draft_llm.invoke(
+        f"""Summarize this email concisely for a voice assistant. 
+        Keep it under 3 sentences. Mention who it's from, the subject, and the key point.
+        Email From: {sender}
+        Subject: {subject}
+        Body: {body[:2000]}
+        Return ONLY the summary, no extra text."""
+    )
+    return response.content.strip()
