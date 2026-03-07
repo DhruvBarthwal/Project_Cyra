@@ -1,5 +1,6 @@
 export function createDeepgramSocket(
-  onFinalTranscript: (text: string) => void
+  onFinalTranscript: (text: string) => void,
+  isSpeaking: { current: boolean }  // ← no React import, no deprecated type
 ) {
   const apiKey = process.env.NEXT_PUBLIC_DEEPGRAM_API_KEY;
 
@@ -10,18 +11,22 @@ export function createDeepgramSocket(
   const socket = new WebSocket(
     "wss://api.deepgram.com/v1/listen" +
       "?model=nova-2" +
-      "&language=en-US" +
+      "&language=en-IN" +
       "&punctuate=true" +
-      "&interim_results=true",
+      "&interim_results=true" +
+      "&utterance_end_ms=1200" +
+      "&vad_events=true",
     ["token", apiKey]
   );
 
+  let accumulated = "";
+
   socket.onopen = () => {
-    console.log(" Deepgram socket connected");
+    console.log("Deepgram socket connected");
   };
 
   socket.onerror = (e) => {
-    console.error(" Deepgram socket error", e);
+    console.error("Deepgram socket error", e);
   };
 
   socket.onclose = () => {
@@ -31,12 +36,22 @@ export function createDeepgramSocket(
   socket.onmessage = (msg) => {
     const data = JSON.parse(msg.data);
 
-    const transcript =
-      data.channel?.alternatives?.[0]?.transcript;
+    if (data.type === "UtteranceEnd") {
+      if (accumulated.trim() && !isSpeaking.current) {  
+        console.log("Full transcript:", accumulated.trim());
+        onFinalTranscript(accumulated.trim());
+      }
+      accumulated = ""; 
+      return;
+    }
 
-    if (transcript && data.is_final) {
-      console.log("Final transcript:", transcript);
-      onFinalTranscript(transcript);
+    if (data.type !== "Results") return;
+
+    const transcript = data.channel?.alternatives?.[0]?.transcript;
+    if (!transcript) return;
+
+    if (data.is_final && !isSpeaking.current) { 
+      accumulated += (accumulated ? " " : "") + transcript;
     }
   };
 

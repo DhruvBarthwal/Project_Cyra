@@ -29,8 +29,9 @@ def hello():
 
 @app.post("/voice")
 async def voice_input(payload: VoiceInput):
+    
+    print(f">>> RECEIVED: '{payload.text}'")  
     config = {"configurable": {"thread_id": "default"}}
-
     result = await asyncio.to_thread(
         graph.invoke,
         {"messages": [HumanMessage(content=payload.text)]},
@@ -43,7 +44,10 @@ async def voice_input(payload: VoiceInput):
         (i for i, m in enumerate(messages) if m.type == "human"),
         default=0
     )
-    messages_this_turn = messages[last_human_idx + 1:] 
+    messages_this_turn = messages[last_human_idx + 1:]
+    
+    print(f"MESSAGES THIS TURN: {[(m.type, m.content[:50] if m.content else '') for m in messages_this_turn]}")
+
     last_ai_with_tool = next(
         (m for m in reversed(messages_this_turn)
          if m.type == "ai" and hasattr(m, "tool_calls") and m.tool_calls),
@@ -51,7 +55,9 @@ async def voice_input(payload: VoiceInput):
     )
     
     if last_ai_with_tool:
+        tool_name = last_ai_with_tool.tool_calls[0]["name"]
         tool_call_id = last_ai_with_tool.tool_calls[0]["id"]
+    
         tool_response = next(
             (m for m in messages_this_turn
              if m.type == "tool" and m.tool_call_id == tool_call_id),
@@ -59,14 +65,16 @@ async def voice_input(payload: VoiceInput):
         )
         ai_after_tool = next(
             (m for m in reversed(messages_this_turn)
-             if m.type == "ai" and m.content and m.content.strip()
-             and not (hasattr(m, "tool_calls") and m.tool_calls)),
+            if m.type == "ai" and m.content and m.content.strip()
+            and not (hasattr(m, "tool_calls") and m.tool_calls)),
             None
         )
-        
-        if ai_after_tool:
+
+        if tool_name == "send_email_flow":
+            response_text = tool_response.content if tool_response else "Done."
+        elif ai_after_tool:
             response_text = ai_after_tool.content
-        elif tool_response:
+        elif tool_response and tool_response.content:
             response_text = tool_response.content
         else:
             response_text = "Done."

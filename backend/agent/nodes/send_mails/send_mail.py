@@ -1,125 +1,92 @@
-from utils.clean_mails import normalize_username
 from utils.gmail_auth import get_gmail_service
-from utils.gmail_tools import send_email
+from utils.gmail_tools import send_email as gmail_send
+from langchain_groq import ChatGroq
 
-#---------------------------- Create a mail ----------------------------
+draft_llm = ChatGroq(model= "openai/gpt-oss-120b", temperature=0.7, max_tokens=800)
 
-def compose_email_node(state):
-    
-    if state.get("awaiting_field") is None:
-        state["intent"] = "COMPOSE_EMAIL"
-        state["awaiting_field"] = "to_local"
-        state["response"] = "Sure. Who do you want to send the email to?"
+def generate_email_draft(topic: str) -> dict:
+    response = draft_llm.invoke(
+        f"""Write a professional email about: {topic}
 
-    return state
+        Rules:
+        - Do NOT assume or invent any names, use generic placeholders like [Name] or [Recipient]
+        - Do NOT use the name "Alex" or any other specific name unless mentioned in the topic
+        - Keep it concise and natural
 
-#---------------------------- Collect email id ----------------------------
-
-def collect_to_local_node(state):
-
-    spoken = state.get("user_input")
-    username = normalize_username(spoken)
-
-    if not username:
-        state["response"] = (
-            "I couldn't understand the username. "
-            "Please say only the part before at, "
-            "for example: dhruv four two one six h."
-        )
-        return state
-
-    state["to_local"] = username
-    state["awaiting_field"] = "email_provider"
-    state["response"] = (
-        "Got it. Is this a Gmail, Outlook, Yahoo, or something else?"
+        Return ONLY in this exact format with no extra text:
+        SUBJECT: <subject line>
+        BODY:
+        <email body>"""
     )
-
-    return state
-
-def collect_provider_node(state):
-
-    spoken = state.get("user_input", "").lower()
-
-    if "gmail" in spoken:
-        domain = "gmail.com"
-    elif "outlook" in spoken or "hotmail" in spoken:
-        domain = "outlook.com"
-    elif "yahoo" in spoken:
-        domain = "yahoo.com"
-    else:
-        state["response"] = (
-            "Please say the email provider clearly. "
-            "For example: Gmail, Outlook, or Yahoo."
-        )
-        return state
-
-    local = state.get("to_local")
-    full_email = f"{local}@{domain}"
     
-    print("full email:",full_email)
+    text = response.content
+    lines = text.strip().split("\n")
+    subject = ""
+    body_lines = []
+    in_body = False
     
-    state["email_provider"] = domain
-    state["to"] = full_email
-
-    state["awaiting_field"] = "subject"
-    state["response"] = f"Okay. What is the subject of the email?"
-
-    print(" FINAL EMAIL:", full_email)
-
-    return state
+    for line in lines:
+        if line.startswith("SUBJECT:"):
+            subject = line.replace("SUBJECT:", "").strip()
+        elif line.startswith("BODY:"):
+            in_body = True
+        elif in_body:
+            body_lines.append(line)
     
-#---------------------------- Collect subject ----------------------------
+    return {
+        "subject": subject,
+        "body": "\n".join(body_lines).strip()
+    }
 
-def collect_subject_node(state):
-    
-    print(f"  Before: to={state.get('to')}, subject={state.get('subject')}, body={state.get('body')}" )
-   
-    state["subject"] = state["user_input"]
-    state["awaiting_field"] = "body"
-    state["response"] = "Okay. What should the email say?"
-    
-    return state
+def enhance_email_draft(current_body: str, instruction: str) -> dict:
+    """Enhance existing draft based on user instruction."""
+    response = draft_llm.invoke(
+        f"""Enhance this email based on instruction: {instruction}
 
-#---------------------------- Collect Body ----------------------------
+        Current email:
+        {current_body}
 
-def collect_body_node(state):
+        Return ONLY in this exact format:
+        SUBJECT: <subject line>
+        BODY:
+        <enhanced email body>"""
+    )
     
-    state["body"] = state["user_input"]
-    state["awaiting_field"] = "confirm"
-    state["response"] = "Do you want me to send this email now?"
+    text = response.content
+    lines = text.strip().split("\n")
+    subject = ""
+    body_lines = []
+    in_body = False
     
-    return state
-
-#---------------------------- Send Mail ----------------------------
+    for line in lines:
+        if line.startswith("SUBJECT:"):
+            subject = line.replace("SUBJECT:", "").strip()
+        elif line.startswith("BODY:"):
+            in_body = True
+        elif in_body:
+            body_lines.append(line)
+    
+    return {
+        "subject": subject,
+        "body": "\n".join(body_lines).strip()
+    }
 
 def send_email_node(state):
+    to = state.get("send_to", "")
+    subject = state.get("draft_subject", "")
+    body = state.get("draft_body", "")
     
-    if not state.get("to") or not state.get("body"):
-        state["response"] = (
-            "Something went wrong. Email details are incomplete. Let's try again."
-        )
-        state["intent"] = "RESET"
+    if not to or not subject or not body:
+        state["response"] = "Missing email details. Let's start over."
         return state
-
+    
     service = get_gmail_service()
+    gmail_send(service, to=to, subject=subject, body=body)
 
-    send_email(
-        service,
-        to=state["to"],
-        subject=state["subject"],
-        body=state["body"],
-    )
-
-    # cleanup
-    state["awaiting_field"] = None
-    state["intent"] = None
-    state["to"] = None
-    state["to_local"] = None
-    state["email_provider"] = None
-    state["subject"] = None
-    state["body"] = None
-
-    state["response"] = "Your email has been sent successfully."
-
+    state["draft_subject"] = ""
+    state["draft_body"] = ""
+    state["send_to"] = ""
+    state["send_step"] = ""
+    state["response"] = f"Email sent to {to}."
+    
     return state
-
